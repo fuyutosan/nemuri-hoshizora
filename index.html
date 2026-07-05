@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000010">
+<title>ねむり星空</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; background:#000; font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif; color:#e8ecff; user-select:none; }
+  #sky { position:fixed; inset:0; display:block; }
+  /* 呼吸する光の玉 */
+  /* 画面いっぱいに広がる「呼吸する光源」＝これが天井を照らす */
+  #light {
+    position:fixed; inset:-12%; z-index:1; pointer-events:none; opacity:0;
+    background: radial-gradient(circle at 50% 47%, var(--hi) 0%, var(--mid) 48%, var(--lo) 100%);
+    will-change: opacity;
+  }
+  #breath { position:fixed; left:0; right:0; top:60%; z-index:2; text-align:center; font-size:5vmin; letter-spacing:.45em; font-weight:300; color:#fff; opacity:.5; mix-blend-mode:difference; pointer-events:none; }
+  #clock { position:fixed; top:6%; left:0; right:0; z-index:2; text-align:center; font-size:9vmin; font-weight:200; letter-spacing:.06em; color:#fff; opacity:.85; mix-blend-mode:difference; pointer-events:none; }
+  #alarmTag { position:fixed; top:16.5%; left:0; right:0; z-index:2; text-align:center; font-size:3.4vmin; color:#fff; opacity:.55; mix-blend-mode:difference; pointer-events:none; }
+  /* スリープタイマー・めざまし用の暗幕（光源より上でまとめて暗転させる） */
+  #veil { position:fixed; inset:0; z-index:3; background:#000; opacity:0; pointer-events:none; transition:opacity 1.2s linear; }
+
+  /* コントロール */
+  #panel {
+    position:fixed; left:0; right:0; bottom:0; padding:5vmin 6vmin calc(6vmin + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg, rgba(6,8,24,0) 0%, rgba(6,8,24,.82) 22%, rgba(6,8,24,.94) 100%);
+    backdrop-filter: blur(6px);
+    transition: transform .4s ease, opacity .4s ease;
+    max-height:74vh; overflow-y:auto;
+  }
+  #panel.hidden { transform:translateY(105%); opacity:0; }
+  .row { margin-bottom:5vmin; }
+  .row:last-child{ margin-bottom:0; }
+  .label { font-size:3.6vmin; opacity:.75; margin-bottom:2.2vmin; display:flex; justify-content:space-between; align-items:center; }
+  .chips { display:flex; gap:2.5vmin; flex-wrap:wrap; }
+  .chip {
+    flex:1 1 auto; min-width:19vmin; text-align:center; padding:3.2vmin 2vmin; border-radius:3.5vmin;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.10); font-size:3.6vmin; color:#e8ecff; cursor:pointer;
+  }
+  .chip.on { background:var(--accent); border-color:var(--accent); color:#0a0e26; font-weight:600; }
+  input[type=range]{ width:100%; height:8vmin; -webkit-appearance:none; background:transparent; }
+  input[type=range]::-webkit-slider-runnable-track{ height:1.6vmin; border-radius:2vmin; background:rgba(255,255,255,.18); }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:6.5vmin; height:6.5vmin; border-radius:50%; background:var(--accent); margin-top:-2.5vmin; box-shadow:0 0 12px var(--accent); }
+  input[type=time]{ background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); color:#e8ecff; font-size:4.4vmin; padding:1.6vmin 3vmin; border-radius:2.6vmin; }
+  #gear { position:fixed; bottom:calc(3vmin + env(safe-area-inset-bottom)); right:4vmin; width:13vmin; height:13vmin; border-radius:50%; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); display:none; align-items:center; justify-content:center; font-size:6vmin; cursor:pointer; }
+  #gear.show{ display:flex; }
+  .hint { font-size:3vmin; opacity:.45; text-align:center; margin-top:1vmin; }
+
+  /* スタート画面 */
+  #start { position:fixed; inset:0; background:#04060f; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6vmin; z-index:20; }
+  #start h1 { font-size:9vmin; font-weight:300; letter-spacing:.35em; text-indent:.35em; }
+  #start p { font-size:3.8vmin; opacity:.6; max-width:78vw; text-align:center; line-height:1.9; }
+  #startBtn { margin-top:2vmin; padding:4vmin 12vmin; border-radius:12vmin; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#e8ecff; font-size:5vmin; letter-spacing:.3em; text-indent:.3em; cursor:pointer; }
+</style>
+</head>
+<body style="--hi:#dfe8ff; --mid:#a9c0ff; --lo:#6e8ff0; --accent:#7f9bff;">
+
+  <canvas id="sky"></canvas>
+  <div id="light"></div>
+  <div id="breath"></div>
+  <div id="clock"></div>
+  <div id="alarmTag"></div>
+  <div id="veil"></div>
+
+  <div id="gear">⚙</div>
+
+  <div id="panel">
+    <div class="row">
+      <div class="label"><span>テーマ（色）</span></div>
+      <div class="chips" id="themes">
+        <div class="chip" data-t="night">夜空</div>
+        <div class="chip" data-t="fire">たき火</div>
+        <div class="chip" data-t="aurora">オーロラ</div>
+        <div class="chip" data-t="moon">月あかり</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="label"><span>明るさ（ピーク＝天井を照らす強さ）</span></div>
+      <input type="range" id="bright" min="20" max="100" value="100">
+    </div>
+
+    <div class="row">
+      <div class="label"><span>やさしい音</span><span id="volLabel" style="opacity:.6"></span></div>
+      <div class="chips" id="sounds">
+        <div class="chip" data-s="off">なし</div>
+        <div class="chip" data-s="rain">雨</div>
+        <div class="chip" data-s="wave">波</div>
+        <div class="chip" data-s="noise">ノイズ</div>
+      </div>
+      <input type="range" id="vol" min="0" max="100" value="45" style="margin-top:3vmin;">
+    </div>
+
+    <div class="row">
+      <div class="label"><span>スリープタイマー</span></div>
+      <div class="chips" id="timers">
+        <div class="chip" data-m="0">なし</div>
+        <div class="chip" data-m="15">15分</div>
+        <div class="chip" data-m="30">30分</div>
+        <div class="chip" data-m="45">45分</div>
+        <div class="chip" data-m="60">60分</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="label"><span>朝のめざまし（ゆっくり明るく）</span></div>
+      <div class="chips" style="align-items:center;">
+        <input type="time" id="alarmTime" value="07:00">
+        <div class="chip" data-a="toggle" id="alarmBtn" style="flex:0 0 auto; min-width:26vmin;">OFF</div>
+      </div>
+    </div>
+    <div class="hint">画面をタップするとメニューを隠せます</div>
+  </div>
+
+  <div id="start">
+    <h1>ねむり星空</h1>
+    <p>画面がゆっくり明るくなって、また暗くなります。その光が天井をふわっと照らし、部屋ぜんたいが呼吸するように明滅します。<br>スマホは画面を上に向けて枕元へ。<b>端末の明るさは最大</b>にしてね。</p>
+    <button id="startBtn">はじめる</button>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const body = document.body;
+
+  /* ---------- テーマ ---------- */
+  const THEMES = {
+    night:  { hi:'#dfe8ff', mid:'#a9c0ff', lo:'#6e8ff0', accent:'#7f9bff', star:'#cdd8ff' },
+    fire:   { hi:'#ffe9c8', mid:'#ffb877', lo:'#ff8a3d', accent:'#ff9a55', star:'#ffcf9a' },
+    aurora: { hi:'#d6ffef', mid:'#86f0c8', lo:'#46d29a', accent:'#5fe0b8', star:'#c7ffe9' },
+    moon:   { hi:'#ffffff', mid:'#eef1ff', lo:'#cdd6f5', accent:'#c3ccf5', star:'#eef1ff' },
+  };
+  let theme = THEMES.night;
+  function applyTheme(name){
+    theme = THEMES[name];
+    body.style.setProperty('--hi', theme.hi);
+    body.style.setProperty('--mid', theme.mid);
+    body.style.setProperty('--lo', theme.lo);
+    body.style.setProperty('--accent', theme.accent);
+    document.querySelectorAll('#themes .chip').forEach(c=>c.classList.toggle('on', c.dataset.t===name));
+    localStorage.setItem('nh_theme', name);
+  }
+
+  /* ---------- 星空キャンバス ---------- */
+  const cv = $('#sky'), ctx = cv.getContext('2d');
+  let W,H,DPR, stars=[], shooters=[];
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = cv.width = innerWidth*DPR; H = cv.height = innerHeight*DPR;
+    cv.style.width = innerWidth+'px'; cv.style.height = innerHeight+'px';
+    const n = Math.round(innerWidth*innerHeight/9000);
+    stars = Array.from({length:n}, ()=>({
+      x:Math.random()*W, y:Math.random()*H, r:(Math.random()*1.3+0.3)*DPR,
+      a:Math.random()*0.5+0.2, tw:Math.random()*0.02+0.004, ph:Math.random()*7,
+      vy:(Math.random()*0.06+0.02)*DPR
+    }));
+  }
+  window.addEventListener('resize', resize);
+
+  function drawSky(t){
+    ctx.clearRect(0,0,W,H);
+    // 暗いときの背景（星が見える暗さ。明滅の“暗”はこの黒に近づく）
+    ctx.fillStyle = '#02030a'; ctx.fillRect(0,0,W,H);
+    // 星
+    ctx.fillStyle = theme.star;
+    for(const s of stars){
+      s.y += s.vy; if(s.y>H+2){ s.y=-2; s.x=Math.random()*W; }
+      const tw = 0.5 + 0.5*Math.sin(t*s.tw*60 + s.ph);
+      ctx.globalAlpha = s.a * (0.5+0.5*tw);
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // 流れ星（たまに）
+    if(Math.random()<0.0016 && shooters.length<2){
+      shooters.push({x:Math.random()*W*0.8+W*0.1, y:Math.random()*H*0.35, len:0, sp:(6+Math.random()*5)*DPR, life:1});
+    }
+    for(let i=shooters.length-1;i>=0;i--){
+      const sh=shooters[i]; sh.x+=sh.sp; sh.y+=sh.sp*0.5; sh.len=Math.min(sh.len+sh.sp, 140*DPR); sh.life-=0.012;
+      const grd=ctx.createLinearGradient(sh.x,sh.y, sh.x-sh.len, sh.y-sh.len*0.5);
+      grd.addColorStop(0, theme.star); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.strokeStyle=grd; ctx.globalAlpha=Math.max(sh.life,0); ctx.lineWidth=1.6*DPR;
+      ctx.beginPath(); ctx.moveTo(sh.x,sh.y); ctx.lineTo(sh.x-sh.len, sh.y-sh.len*0.5); ctx.stroke();
+      if(sh.life<=0||sh.x>W) shooters.splice(i,1);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  /* ---------- 画面全体で呼吸する光（4-6呼吸） ---------- */
+  const light=$('#light'), breathEl=$('#breath');
+  // 吸う4s / 止める1s / 吐く6s / 止める1s = 12秒
+  const IN=4, H1=1, OUT=6, H2=1, CYCLE=IN+H1+OUT+H2;
+  const easeInOut = x => 0.5-0.5*Math.cos(Math.PI*x);
+  const FLOOR = 0.04;                  // “暗”のときの明るさ（星が見える）
+  let peakCap = 1.0;                   // “明”のピーク（明るさスライダー＝天井を照らす強さ）
+  function updateBreath(now){
+    const t = (now/1000)%CYCLE;
+    let b, txt;
+    if(t<IN){ b=easeInOut(t/IN); txt='吸って'; }
+    else if(t<IN+H1){ b=1; txt='　'; }
+    else if(t<IN+H1+OUT){ b=1-easeInOut((t-IN-H1)/OUT); txt='吐いて'; }
+    else { b=0; txt='　'; }
+    // 画面いっぱいの光を暗↔明にフェード。ピークで最大まで振り切る
+    light.style.opacity = (FLOOR + b*(peakCap-FLOOR)).toFixed(3);
+    if(breathEl.textContent!==txt) breathEl.textContent = txt;
+  }
+
+  /* ---------- 音（WebAudioで生成／音源ファイル不要） ---------- */
+  let ac, master, noiseSrc, filter, lfo, lfoGain, curSound='off';
+  function ensureAudio(){
+    if(ac) return;
+    ac = new (window.AudioContext||window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value=0; master.connect(ac.destination);
+    const buf = ac.createBuffer(1, ac.sampleRate*2, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    let last=0;
+    for(let i=0;i<d.length;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.5; } // ピンクっぽい
+    noiseSrc = ac.createBufferSource(); noiseSrc.buffer=buf; noiseSrc.loop=true;
+    filter = ac.createBiquadFilter();
+    noiseSrc.connect(filter); filter.connect(master);
+    noiseSrc.start();
+  }
+  function setSound(type){
+    curSound=type;
+    document.querySelectorAll('#sounds .chip').forEach(c=>c.classList.toggle('on', c.dataset.s===type));
+    localStorage.setItem('nh_sound', type);
+    if(type==='off'){ if(master) master.gain.setTargetAtTime(0, ac.currentTime, 0.4); return; }
+    ensureAudio(); if(ac.state==='suspended') ac.resume();
+    if(lfo){ try{lfo.stop()}catch(e){} lfo=null; }
+    if(type==='rain'){ filter.type='highpass'; filter.frequency.value=900; filter.Q.value=0.4; }
+    else if(type==='noise'){ filter.type='lowpass'; filter.frequency.value=1100; filter.Q.value=0.2; }
+    else if(type==='wave'){
+      filter.type='lowpass'; filter.frequency.value=650; filter.Q.value=0.3;
+      lfo=ac.createOscillator(); lfoGain=ac.createGain();
+      lfo.frequency.value=0.12; lfoGain.gain.value=0.5;
+      lfo.connect(lfoGain); lfoGain.connect(master.gain); lfo.start();
+    }
+    applyVolume();
+  }
+  let baseVol=0.45;
+  function applyVolume(){
+    if(!master) return;
+    const v = curSound==='off'?0:baseVol;
+    master.gain.setTargetAtTime(v, ac.currentTime, 0.5);
+  }
+
+  /* ---------- 明るさ・スリープタイマー・めざまし ---------- */
+  const veil=$('#veil');
+  let timerEnd=0, fadeStart=0, sleeping=false;
+  let manualVeil=0;               // タイマー/めざましの暗転だけを担当
+  function applyBright(){ veil.style.opacity = Math.max(0, Math.min(1, manualVeil)).toFixed(3); }
+  function setTimerMinutes(m){
+    document.querySelectorAll('#timers .chip').forEach(c=>c.classList.toggle('on', +c.dataset.m===m));
+    if(m===0){ timerEnd=0; return; }
+    timerEnd = Date.now()+m*60000; fadeStart=timerEnd-120000; sleeping=false;
+  }
+  // めざまし
+  let alarmOn=false, alarmTime='07:00', alarmFiring=false, alarmStart=0;
+  function setAlarm(on){
+    alarmOn=on; $('#alarmBtn').classList.toggle('on', on); $('#alarmBtn').textContent = on?'ON':'OFF';
+    updateAlarmTag(); localStorage.setItem('nh_alarmOn', on?'1':'0');
+  }
+  function updateAlarmTag(){ $('#alarmTag').textContent = alarmOn ? '⏰ '+alarmTime : ''; }
+
+  function tickTimers(){
+    const now=Date.now();
+    // スリープ：最後の2分でスーッと暗転→消灯
+    if(timerEnd){
+      if(now>=timerEnd){ manualVeil=1; if(!sleeping){ sleeping=true; setSound('off'); } }
+      else if(now>=fadeStart){ manualVeil = (now-fadeStart)/(timerEnd-fadeStart); }
+      else manualVeil=0;
+    } else if(!alarmFiring) manualVeil=0;
+    // めざまし：設定時刻から5分かけて明るく
+    if(alarmOn){
+      const d=new Date(); const cur=d.getHours()*60+d.getMinutes();
+      const [ah,am]=alarmTime.split(':').map(Number); const at=ah*60+am;
+      if(!alarmFiring && cur===at && d.getSeconds()<2){ alarmFiring=true; alarmStart=now; sleeping=false; timerEnd=0;
+        if(curSound==='off') setSound('wave'); }
+      if(alarmFiring){
+        const p=Math.min((now-alarmStart)/300000,1);   // 5分かけて暗→明
+        manualVeil = Math.max(0,(1-p));
+        if(p>=1) alarmFiring=false;
+      }
+    }
+    applyBright();
+  }
+
+  /* ---------- 時計 ---------- */
+  function tickClock(){ const d=new Date();
+    $('#clock').textContent = String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+
+  /* ---------- メインループ ---------- */
+  function loop(now){ drawSky(now); updateBreath(now); requestAnimationFrame(loop); }
+
+  /* ---------- 画面キープ（Wake Lock） ---------- */
+  let wl=null;
+  async function keepAwake(){ try{ if('wakeLock' in navigator){ wl=await navigator.wakeLock.request('screen'); } }catch(e){} }
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') keepAwake(); });
+
+  /* ---------- UI 配線 ---------- */
+  const panel=$('#panel'), gear=$('#gear');
+  function togglePanel(show){ panel.classList.toggle('hidden', !show); gear.classList.toggle('show', !show); }
+  $('#sky').addEventListener('click', ()=> togglePanel(panel.classList.contains('hidden')) );
+  gear.addEventListener('click', e=>{ e.stopPropagation(); togglePanel(true); });
+
+  $('#themes').addEventListener('click', e=>{ const c=e.target.closest('.chip'); if(c) applyTheme(c.dataset.t); });
+  $('#sounds').addEventListener('click', e=>{ const c=e.target.closest('.chip'); if(c) setSound(c.dataset.s); });
+  $('#timers').addEventListener('click', e=>{ const c=e.target.closest('.chip'); if(c) setTimerMinutes(+c.dataset.m); });
+  $('#bright').addEventListener('input', e=>{ peakCap=e.target.value/100; localStorage.setItem('nh_bright',e.target.value); });
+  $('#vol').addEventListener('input', e=>{ baseVol=e.target.value/100; $('#volLabel').textContent=e.target.value+'%'; applyVolume(); localStorage.setItem('nh_vol',e.target.value); });
+  $('#alarmTime').addEventListener('change', e=>{ alarmTime=e.target.value; updateAlarmTag(); localStorage.setItem('nh_alarmTime',alarmTime); });
+  $('#alarmBtn').addEventListener('click', ()=> setAlarm(!alarmOn));
+
+  /* ---------- 復元 ---------- */
+  applyTheme(localStorage.getItem('nh_theme')||'night');
+  { const b=localStorage.getItem('nh_bright'); if(b){ $('#bright').value=b; peakCap=b/100; } else { peakCap=1; } }
+  { const v=localStorage.getItem('nh_vol'); if(v){ $('#vol').value=v; baseVol=v/100; } $('#volLabel').textContent=$('#vol').value+'%'; }
+  { const at=localStorage.getItem('nh_alarmTime'); if(at){ $('#alarmTime').value=at; alarmTime=at; } }
+  setAlarm(localStorage.getItem('nh_alarmOn')==='1');
+  document.querySelector('#timers .chip[data-m="0"]').classList.add('on');
+  document.querySelector('#sounds .chip[data-s="off"]').classList.add('on');
+
+  /* ---------- スタート ---------- */
+  $('#startBtn').addEventListener('click', ()=>{
+    $('#start').style.display='none';
+    resize(); requestAnimationFrame(loop);
+    keepAwake();
+    const savedSound=localStorage.getItem('nh_sound');
+    if(savedSound && savedSound!=='off') setSound(savedSound); else setSound('off');
+    applyBright();
+    setInterval(()=>{ tickTimers(); }, 500);
+    setInterval(tickClock, 1000); tickClock();
+    if(document.documentElement.requestFullscreen){ document.documentElement.requestFullscreen().catch(()=>{}); }
+    togglePanel(true);
+  });
+
+  resize(); tickClock();
+})();
+</script>
+</body>
+</html>
