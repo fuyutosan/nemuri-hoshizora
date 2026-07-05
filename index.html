@@ -44,6 +44,7 @@
   input[type=range]::-webkit-slider-runnable-track{ height:1.6vmin; border-radius:2vmin; background:rgba(255,255,255,.18); }
   input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:6.5vmin; height:6.5vmin; border-radius:50%; background:var(--accent); margin-top:-2.5vmin; box-shadow:0 0 12px var(--accent); }
   input[type=time]{ background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); color:#e8ecff; font-size:4.4vmin; padding:1.6vmin 3vmin; border-radius:2.6vmin; }
+  input[type=color]{ flex:1 1 auto; height:9vmin; border:1px solid rgba(255,255,255,.16); border-radius:2.6vmin; background:rgba(255,255,255,.06); padding:1vmin; cursor:pointer; }
   #gear { position:fixed; bottom:calc(3vmin + env(safe-area-inset-bottom)); right:4vmin; width:13vmin; height:13vmin; border-radius:50%; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); display:none; align-items:center; justify-content:center; font-size:6vmin; cursor:pointer; }
   #gear.show{ display:flex; }
   .hint { font-size:3vmin; opacity:.45; text-align:center; margin-top:1vmin; }
@@ -74,6 +75,14 @@
         <div class="chip" data-t="fire">たき火</div>
         <div class="chip" data-t="aurora">オーロラ</div>
         <div class="chip" data-t="moon">月あかり</div>
+        <div class="chip" data-t="sakura">さくら</div>
+        <div class="chip" data-t="lavender">ラベンダー</div>
+        <div class="chip" data-t="sea">深海</div>
+        <div class="chip" data-t="custom">カスタム</div>
+      </div>
+      <div id="customRow" style="display:flex; align-items:center; gap:3vmin; margin-top:3vmin;">
+        <span style="font-size:3.2vmin; opacity:.6; white-space:nowrap;">カスタムの色</span>
+        <input type="color" id="customColor" value="#8fb4ff">
       </div>
     </div>
 
@@ -128,14 +137,30 @@
 
   /* ---------- テーマ ---------- */
   const THEMES = {
-    night:  { hi:'#dfe8ff', mid:'#a9c0ff', lo:'#6e8ff0', accent:'#7f9bff', star:'#cdd8ff' },
-    fire:   { hi:'#ffe9c8', mid:'#ffb877', lo:'#ff8a3d', accent:'#ff9a55', star:'#ffcf9a' },
-    aurora: { hi:'#d6ffef', mid:'#86f0c8', lo:'#46d29a', accent:'#5fe0b8', star:'#c7ffe9' },
-    moon:   { hi:'#ffffff', mid:'#eef1ff', lo:'#cdd6f5', accent:'#c3ccf5', star:'#eef1ff' },
+    night:    { hi:'#dfe8ff', mid:'#a9c0ff', lo:'#6e8ff0', accent:'#7f9bff', star:'#cdd8ff' },
+    fire:     { hi:'#ffe9c8', mid:'#ffb877', lo:'#ff8a3d', accent:'#ff9a55', star:'#ffcf9a' },
+    aurora:   { hi:'#d6ffef', mid:'#86f0c8', lo:'#46d29a', accent:'#5fe0b8', star:'#c7ffe9' },
+    moon:     { hi:'#ffffff', mid:'#eef1ff', lo:'#cdd6f5', accent:'#c3ccf5', star:'#eef1ff' },
+    sakura:   { hi:'#ffe3ef', mid:'#ffb3d1', lo:'#ff88b8', accent:'#ff9ec7', star:'#ffd6e8' },
+    lavender: { hi:'#efe6ff', mid:'#c9b3ff', lo:'#a888f0', accent:'#c3a8ff', star:'#e6dcff' },
+    sea:      { hi:'#d6f6ff', mid:'#7fd8e6', lo:'#3aa6c9', accent:'#5fc8dd', star:'#c7f0ff' },
   };
+  // 色を白に寄せて明るくする（カスタム色から光のグラデを作る）
+  function lighten(hex, t){
+    hex = hex.replace('#',''); if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+    const mix = c => Math.round(c+(255-c)*t);
+    const h = c => c.toString(16).padStart(2,'0');
+    return '#'+h(mix(r))+h(mix(g))+h(mix(b));
+  }
+  function buildCustom(base){
+    return { hi:lighten(base,0.85), mid:lighten(base,0.5), lo:lighten(base,0.16), accent:lighten(base,0.28), star:lighten(base,0.7) };
+  }
   let theme = THEMES.night;
   function applyTheme(name){
-    theme = THEMES[name];
+    const th = name==='custom' ? buildCustom($('#customColor').value) : THEMES[name];
+    if(!th) return;
+    theme = th;
     body.style.setProperty('--hi', theme.hi);
     body.style.setProperty('--mid', theme.mid);
     body.style.setProperty('--lo', theme.lo);
@@ -306,6 +331,7 @@
   gear.addEventListener('click', e=>{ e.stopPropagation(); togglePanel(true); });
 
   $('#themes').addEventListener('click', e=>{ const c=e.target.closest('.chip'); if(c) applyTheme(c.dataset.t); });
+  $('#customColor').addEventListener('input', e=>{ localStorage.setItem('nh_custom', e.target.value); applyTheme('custom'); });
   $('#sounds').addEventListener('click', e=>{ const c=e.target.closest('.chip'); if(c) setSound(c.dataset.s); });
   $('#timers').addEventListener('click', e=>{ const c=e.target.closest('.chip'); if(c) setTimerMinutes(+c.dataset.m); });
   $('#bright').addEventListener('input', e=>{ peakCap=e.target.value/100; localStorage.setItem('nh_bright',e.target.value); });
@@ -314,6 +340,7 @@
   $('#alarmBtn').addEventListener('click', ()=> setAlarm(!alarmOn));
 
   /* ---------- 復元 ---------- */
+  { const cc=localStorage.getItem('nh_custom'); if(cc) $('#customColor').value=cc; }
   applyTheme(localStorage.getItem('nh_theme')||'night');
   { const b=localStorage.getItem('nh_bright'); if(b){ $('#bright').value=b; peakCap=b/100; } else { peakCap=1; } }
   { const v=localStorage.getItem('nh_vol'); if(v){ $('#vol').value=v; baseVol=v/100; } $('#volLabel').textContent=$('#vol').value+'%'; }
