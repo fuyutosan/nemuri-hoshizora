@@ -25,7 +25,7 @@
   /* 画面いっぱいに広がる「呼吸する光源」＝これが天井を照らす */
   #light {
     position:fixed; inset:-12%; z-index:1; pointer-events:none; opacity:0;
-    background: radial-gradient(circle at 50% 47%, var(--hi) 0%, var(--mid) 48%, var(--lo) 100%);
+    background: radial-gradient(circle at 50% 47%, var(--hi) 0%, var(--mid) 36%, var(--lo) 100%);
     will-change: opacity;
   }
   #breath { position:fixed; left:0; right:0; top:60%; z-index:2; text-align:center; font-size:5vmin; letter-spacing:.45em; font-weight:300; color:#fff; opacity:.5; mix-blend-mode:difference; pointer-events:none; }
@@ -68,7 +68,7 @@
   #startBtn { margin-top:2vmin; padding:4vmin 12vmin; border-radius:12vmin; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#e8ecff; font-size:5vmin; letter-spacing:.3em; text-indent:.3em; cursor:pointer; }
 </style>
 </head>
-<body style="--hi:#dfe8ff; --mid:#a9c0ff; --lo:#6e8ff0; --accent:#7f9bff;">
+<body style="--hi:#7d9df7; --mid:#4a67cc; --lo:#26397e; --accent:#7f9bff;">
 
   <canvas id="sky"></canvas>
   <div id="light"></div>
@@ -148,16 +148,17 @@
   const body = document.body;
 
   /* ---------- テーマ ---------- */
+  // 中心(hi)も白に寄せすぎず、選んだ色の濃さをしっかり残す
   const THEMES = {
-    night:    { hi:'#dfe8ff', mid:'#a9c0ff', lo:'#6e8ff0', accent:'#7f9bff', star:'#cdd8ff' },
-    fire:     { hi:'#ffe9c8', mid:'#ffb877', lo:'#ff8a3d', accent:'#ff9a55', star:'#ffcf9a' },
-    aurora:   { hi:'#d6ffef', mid:'#86f0c8', lo:'#46d29a', accent:'#5fe0b8', star:'#c7ffe9' },
-    moon:     { hi:'#ffffff', mid:'#eef1ff', lo:'#cdd6f5', accent:'#c3ccf5', star:'#eef1ff' },
-    sakura:   { hi:'#ffe3ef', mid:'#ffb3d1', lo:'#ff88b8', accent:'#ff9ec7', star:'#ffd6e8' },
-    lavender: { hi:'#efe6ff', mid:'#c9b3ff', lo:'#a888f0', accent:'#c3a8ff', star:'#e6dcff' },
-    sea:      { hi:'#d6f6ff', mid:'#7fd8e6', lo:'#3aa6c9', accent:'#5fc8dd', star:'#c7f0ff' },
+    night:    { hi:'#7d9df7', mid:'#4a67cc', lo:'#26397e', accent:'#7f9bff', star:'#cdd8ff' },
+    fire:     { hi:'#ff9a52', mid:'#f06f28', lo:'#a83c10', accent:'#ff9a55', star:'#ffcf9a' },
+    aurora:   { hi:'#4fdca8', mid:'#1fb37f', lo:'#0c7150', accent:'#5fe0b8', star:'#c7ffe9' },
+    moon:     { hi:'#c8d2f5', mid:'#94a2d6', lo:'#5f6ea8', accent:'#c3ccf5', star:'#eef1ff' },
+    sakura:   { hi:'#ff9ec4', mid:'#f06f9e', lo:'#b8446e', accent:'#ff9ec7', star:'#ffd6e8' },
+    lavender: { hi:'#b79cf7', mid:'#8d6fe0', lo:'#5c44a8', accent:'#c3a8ff', star:'#e6dcff' },
+    sea:      { hi:'#5cc2dd', mid:'#2f94b6', lo:'#155d7e', accent:'#5fc8dd', star:'#c7f0ff' },
   };
-  // 色を白に寄せて明るくする（カスタム色から光のグラデを作る）
+  // 色を白に寄せて明るくする
   function lighten(hex, t){
     hex = hex.replace('#',''); if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
     const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
@@ -165,8 +166,17 @@
     const h = c => c.toString(16).padStart(2,'0');
     return '#'+h(mix(r))+h(mix(g))+h(mix(b));
   }
+  // 色を黒に寄せて暗くする（外側のグラデ用）
+  function darken(hex, t){
+    hex = hex.replace('#',''); if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+    const mix = c => Math.round(c*(1-t));
+    const h = c => c.toString(16).padStart(2,'0');
+    return '#'+h(mix(r))+h(mix(g))+h(mix(b));
+  }
+  // カスタム色：選んだ色そのものを中心色にして、濃さを保ったまま外へ暗くする
   function buildCustom(base){
-    return { hi:lighten(base,0.85), mid:lighten(base,0.5), lo:lighten(base,0.16), accent:lighten(base,0.28), star:lighten(base,0.7) };
+    return { hi:lighten(base,0.18), mid:darken(base,0.22), lo:darken(base,0.6), accent:lighten(base,0.28), star:lighten(base,0.7) };
   }
   let theme = THEMES.night;
   function applyTheme(name){
